@@ -1,21 +1,24 @@
+/* suid tool for setting screen brightness in increments
+ * GPL-3
+ */
 #define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 
-const char *BRIGHTNESS_MAX = "/sys/class/backlight/intel_backlight/max_brightness";
-const char *BRIGHTNESS_CUR = "/sys/class/backlight/intel_backlight/brightness";
+#include "arg.h"
+#include "common.h"
 
-void usage(void)
-{
-	fprintf(stderr, "usage: brightness up|dn\n");
-	exit(1);
-}
+static const char *BRIGHT_MAX = "/sys/class/backlight/intel_backlight/max_brightness";
+static const char *BRIGHT_CUR = "/sys/class/backlight/intel_backlight/brightness";
 
-void die(const char *m)
+char *argv0;
+
+static void usage(void)
 {
-	perror(m);
-	exit(1);
+	die("usage: %s [-u] [-d]\n\n"
+	"    -u: brightness up by one increment\n"
+	"    -d: brightness down by one increment", argv0);
 }
 
 enum Op {
@@ -25,62 +28,64 @@ enum Op {
 
 int main(int argc, char *argv[])
 {
-	enum Op op;
-	int new, max, cur, inc;
-	size_t len;
-	char *line;
+	enum Op op = 0;
+	int max, cur, inc;
+	int uflag = 0, dflag = 0;
+	size_t len, nread;
+	char *line = NULL;
 	FILE *fd;
 
-	if (argc != 2)
-		usage();
-
-	if (!strcmp(argv[1], "up"))
+	ARGBEGIN {
+	case 'u':
+		uflag =1;
 		op = UP;
-	else if (!strcmp(argv[1], "dn"))
+		break;
+	case 'd':
+		dflag = 1;
 		op = DN;
-	else
+		break;
+	default:
+		usage();
+	} ARGEND;
+
+	if ((uflag && dflag) || (!dflag && !uflag))
 		usage();
 
 	/* Find out max brightness */
-	if ((fd = fopen(BRIGHTNESS_MAX, "r")) == NULL)
-		die("fopen");
+	if ((fd = fopen(BRIGHT_MAX, "r")) == NULL)
+		die("Couldn't read %s:", BRIGHT_MAX);
 
-	size_t nread = getline(&line, &len, fd);
-	(void)nread;
+	nread = getline(&line, &len, fd);
 	fclose(fd);
 	fd = NULL;
 
 	max = atoi(line);
 	free(line);
 	line = NULL;
-
+	
+	/* Here the number of available increments can be configured */
 	inc = max / 20;
 
-	if ((fd = fopen(BRIGHTNESS_CUR, "w+")) == NULL)
-		die("fopen");
+	/* Find out current brightness */
+	if ((fd = fopen(BRIGHT_CUR, "w+")) == NULL)
+		die("Couldn't open %s for r/w:", BRIGHT_CUR);
 
 	nread = getline(&line, &len, fd);
 	(void)nread;
+
 	cur = atoi(line);
 	free(line);
 	line = NULL;
 
 	switch(op) {
 	case UP:
-		if (cur + inc > max)
-			new = max;
-		else
-			new = cur + inc;
+		fprintf(fd, "%d", cur + inc > max ? max : cur + inc);
 		break;
 	case DN:
-		if (cur - inc < 1)
-			new = 1;
-		else
-			new = cur - inc;
+		fprintf(fd, "%d", cur - inc < 1 ? 1 : cur - inc);
+		break;
 	}
 
-	fprintf(fd, "%d", new);
 	fclose(fd);
-
 	return 0;
 }

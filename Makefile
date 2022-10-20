@@ -1,34 +1,40 @@
 .POSIX:
 
+# Install prefix
 PREFIX = /usr/local
-CFLAGS = -std=c99 -pedantic -Wall -Wextra -Werror -Os -static
-LDFLAGS = -s -static
 
-SBIN = charge-thresholds brightness
+# Common flags
+CFLAGS = -std=c99 -pedantic -Wall -Wextra -Werror -Os
+LDFLAGS = -s
 
-CC = cc
+# static suid binaries
+SUID_BIN = brightness charge-thresholds
 
-all: $(SBIN)
+HDR = arg.h common.h
+SRC = common.c
+OBJ = $(SRC:.c=.o)
 
-$(SBIN):
+all: $(OBJ) $(SUID_BIN)
+
+$(OBJ): $(HDR)
+
+$(SUID_BIN): $(SUID_BIN:=.c) $(OBJ)
 	$(CC) -c $(CFLAGS) $@.c
-	$(CC) -o $@ $@.o $(LDFLAGS)
+	$(CC) -o $@ $@.o $(OBJ) $(LDFLAGS) -static
 
 clean:
-	for i in $(SBIN); do \
-		rm -f $$i.o $$i ; \
-	done
+	rm -f *.o $(SUID_BIN)
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	for i in $(SBIN); do \
+	for i in $(SUID_BIN); do \
 		cp -f $$i $(DESTDIR)$(PREFIX)/bin ; \
 		chmod 4711 $(DESTDIR)$(PREFIX)/bin/$$i ; \
 		chmod u+s $(DESTDIR)$(PREFIX)/bin/$$i ; \
 	done
 
 uninstall:
-	for i in $(SBIN); do \
+	for i in $(SUID_BIN); do \
 		rm -f $(DESTDIR)$(PREFIX)/bin/$$i ; \
 	done
 
