@@ -8,7 +8,7 @@ CFLAGS = -std=c99 -pedantic -Wall -Wextra -Werror -Os
 LDFLAGS = -s
 
 # static suid binaries
-SUID_BIN = brightness charge-thresholds
+SUID_BIN = brightness charge-thresholds perf-profile
 
 HDR = arg.h common.h
 SRC = common.c
