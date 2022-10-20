@@ -16,21 +16,25 @@ char *argv0;
 
 static void usage(void)
 {
-	die("usage: %s [-u] [-d]\n\n"
+	die("usage: %s [-u] [-d] [-z] [-x]\n\n"
 	"    -u: brightness up by one increment\n"
-	"    -d: brightness down by one increment", argv0);
+	"    -d: brightness down by one increment\n"
+	"    -z: brightness to lowest increment\n"
+	"    -x: brightness to maximum possible", argv0);
 }
 
 enum Op {
 	UP,
 	DN,
+	MN,
+	MX,
 };
 
 int main(int argc, char *argv[])
 {
 	enum Op op = 0;
 	int max, cur, inc;
-	int uflag = 0, dflag = 0;
+	int uflag = 0, dflag = 0, minflag = 0, maxflag = 0;
 	size_t len, nread;
 	char *line = NULL;
 	FILE *fd;
@@ -44,11 +48,19 @@ int main(int argc, char *argv[])
 		dflag = 1;
 		op = DN;
 		break;
+	case 'z':
+		minflag = 1;
+		op = MN;
+		break;
+	case 'x':
+		maxflag = 1;
+		op = MX;
+		break;
 	default:
 		usage();
 	} ARGEND;
 
-	if ((uflag && dflag) || (!dflag && !uflag))
+	if ((uflag && dflag) || (maxflag && minflag))
 		usage();
 
 	/* Find out max brightness */
@@ -62,7 +74,7 @@ int main(int argc, char *argv[])
 	max = atoi(line);
 	free(line);
 	line = NULL;
-	
+
 	/* Here the number of available increments can be configured */
 	inc = max / 20;
 
@@ -83,6 +95,12 @@ int main(int argc, char *argv[])
 		break;
 	case DN:
 		fprintf(fd, "%d", cur - inc < 1 ? 1 : cur - inc);
+		break;
+	case MN:
+		fprintf(fd, "%d", inc);
+		break;
+	case MX:
+		fprintf(fd, "%d", max);
 		break;
 	}
 
