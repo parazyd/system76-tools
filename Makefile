@@ -7,35 +7,44 @@ PREFIX = /usr/local
 CFLAGS = -std=c99 -pedantic -Wall -Wextra -Werror -Os
 LDFLAGS = -s
 
+# Common headers and objects
+HDR = arg.h common.h
+OBJ = common.o
+
 # static suid binaries
 SUID_BIN = brightness charge-thresholds perf-profile
+BRIGHTNESSOBJ = $(OBJ) brightness.o
+CHARGETHRESHOLDSOBJ = $(OBJ) charge-thresholds.o
+PERFPROFILEOBJ = $(OBJ) perf-profile.o
 
-HDR = arg.h common.h
-SRC = common.c
-OBJ = $(SRC:.c=.o)
+all: $(SUID_BIN)
 
-all: $(OBJ) $(SUID_BIN)
-
-$(OBJ): $(HDR)
-
-$(SUID_BIN): $(SUID_BIN:=.c) $(OBJ)
-	$(CC) -c $(CFLAGS) $@.c
-	$(CC) -o $@ $@.o $(OBJ) $(LDFLAGS) -static
+$(BRIGHTNESSOBJ) $(CHARGETHRESHOLDSOBJ) $(PERFPROFILEOBJ): $(HDR)
 
 clean:
-	rm -f *.o $(SUID_BIN)
+	rm -f $(BRIGHTNESSOBJ) $(CHARGETHRESHOLDSOBJ) $(PERFPROFILEOBJ)
 
 install: all
 	mkdir -p $(DESTDIR)$(PREFIX)/bin
-	for i in $(SUID_BIN); do \
-		cp -f $$i $(DESTDIR)$(PREFIX)/bin ; \
-		chmod 4711 $(DESTDIR)$(PREFIX)/bin/$$i ; \
-		chmod u+s $(DESTDIR)$(PREFIX)/bin/$$i ; \
-	done
+	cp -f $(SUID_BIN) $(DESTDIR)$(PREFIX)/bin
+	cd $(DESTDIR)$(PREFIX)/bin && chmod 4711 $(SUID_BIN)
+	cd $(DESTDIR)$(PREFIX)/bin && chmod u+s $(SUID_BIN)
 
 uninstall:
-	for i in $(SUID_BIN); do \
-		rm -f $(DESTDIR)$(PREFIX)/bin/$$i ; \
-	done
+	cd $(DESTDIR)$(PREFIX)/bin && rm -f $(SUID_BIN)
+
+.SUFFIXES: .c .o
+
+.c.o:
+	$(CC) $(CFLAGS) -c $<
+
+brightness: $(BRIGHTNESSOBJ)
+	$(CC) -o $@ $(BRIGHTNESSOBJ) $(LDFLAGS) -static
+
+charge-thresholds: $(CHARGETHRESHOLDSOBJ)
+	$(CC) -o $@ $(CHARGETHRESHOLDSOBJ) $(LDFLAGS) -static
+
+perf-profile: $(PERFPROFILEOBJ)
+	$(CC) -o $@ $(PERFPROFILEOBJ) $(LDFLAGS) -static
 
 .PHONY: all clean install uninstall
