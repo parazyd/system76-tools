@@ -34,6 +34,11 @@ enum Profile {
 	PERFORMANCE,
 };
 
+enum MType {
+	MIN,
+	MAX,
+};
+
 static void usage(void)
 {
 	die("usage: %s [-v] low-power|balanced|performance", argv0);
@@ -50,80 +55,67 @@ static void set_max_lost_work(int secs)
 		die("Could not open %s for writing:", DIRTY_WRITEBACK);
 }
 
-static int get_frequency(int typ, int cpu)
+static int get_frequency(enum MType typ, int cpu)
 {
-	/* typ is 0 for min, !0 for max */
-	FILE *fd;
-	char *line = NULL, *path, *rem;
-	char ccpu[1]; /* Will break if cpu > 9 */
+	const char *rem;
+	char *line = NULL, *path;
 	size_t nread, len;
 	int plen, ret;
+	FILE *fd;
 
-	if (typ)
-		rem = "/cpufreq/cpuinfo_max_freq";
-	else
+	switch(typ) {
+	case MIN:
 		rem = "/cpufreq/cpuinfo_min_freq";
+		break;
+	case MAX:
+		rem = "/cpufreq/cpuinfo_max_freq";
+		break;
+	}
 
-
-	itoa(cpu, ccpu);
-
-	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + 2;
+	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + intlen(cpu) + 1;
 	path = malloc(plen);
 	memset(path, 0, plen);
-
-	path = strcat(path, SYS_CPU_PREFIX);
-	path = strcat(path, ccpu);
-	path = strcat(path, rem);
+	snprintf(path, plen, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
 
 	if ((fd = fopen(path, "r")) == NULL) {
 		free(path);
-		die("Could not open cpu%d min/max file for reading:", cpu);
+		die("Could not open cpu%d%s file for reading:", cpu, rem);
 	}
-
-	free(path);
 
 	nread = getline(&line, &len, fd);
 	(void)nread;
 
 	ret = atoi(line);
+
+	free(path);
 	free(line);
 
 	return ret;
 }
 
-static void set_frequency(int typ, int cpu, int freq)
+static void set_frequency(enum MType typ, int cpu, int freq)
 {
-	/* typ is 0 for min, !0 for max */
-	char *path, *rem, *ccpu;
+	const char *rem;
+	char *path;
 	int plen;
 
-	if (cpu > 9) {
-		ccpu = malloc(2);
-		memset(ccpu, 0, 2);
-	} else {
-		ccpu = malloc(1);
-		memset(ccpu, 0, 1);
+	switch(typ) {
+	case MIN:
+		rem = "/cpufreq/scaling_min_freq";
+		break;
+	case MAX:
+		rem = "/cpufreq/scaling_max_freq";
+		break;
 	}
 
-	if (typ)
-		rem = "/cpufreq/scaling_max_freq";
-	else
-		rem = "/cpufreq/scaling_min_freq";
-
-	itoa(cpu, ccpu);
-	plen = strlen(ccpu) + strlen(SYS_CPU_PREFIX) + strlen(rem);
+	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + intlen(cpu) + 1;
 	path = malloc(plen);
 	memset(path, 0, plen);
-
-	path = strcat(path, SYS_CPU_PREFIX);
-	path = strcat(path, ccpu);
-	path = strcat(path, rem);
-
-	free(ccpu);
+	snprintf(path, plen, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
 
 	if (write_oneshot_int(path, freq)) {
 		free(path);
-		die("Could not open cpu%d min/max file for writing:", cpu);
+		die("Could not open cpu%d%s file for writing:", cpu, rem);
 	}
 		
 	free(path);
@@ -131,32 +123,18 @@ static void set_frequency(int typ, int cpu, int freq)
 
 static void set_governor(int cpu, const char *governor)
 {
-	char *path, *ccpu;
-	char *rem = "/cpufreq/scaling_governor";
+	const char *rem = "/cpufreq/scaling_governor";
+	char *path;
 	int plen;
 
-	if (cpu > 9) {
-		ccpu = malloc(2);
-		memset(ccpu, 0, 2);
-	} else {
-		ccpu = malloc(1);
-		memset(ccpu, 0, 1);
-	}
-
-	itoa(cpu, ccpu);
-	plen = strlen(ccpu) + strlen(SYS_CPU_PREFIX) + strlen(rem);
+	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + intlen(cpu) + 1;
 	path = malloc(plen);
 	memset(path, 0, plen);
-
-	path = strcat(path, SYS_CPU_PREFIX);
-	path = strcat(path, ccpu);
-	path = strcat(path, rem);
-
-	free(ccpu);
+	snprintf(path, plen, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
 
 	if (write_oneshot_str(path, governor)) {
 		free(path);
-		die("Could not open cpu%d governor file:", cpu);
+		die("Could not write to cpu%d%s file:", cpu, rem);
 	}
 
 	free(path);
@@ -164,9 +142,8 @@ static void set_governor(int cpu, const char *governor)
 
 static void cpufreq_set(enum Profile profile, int max_percent)
 {
-	int i, nproc;
-	int min, max;
-	char *governor;
+	const char *governor;
+	int i, nproc, min, max;
 
 	/* We assume we have intel_pstate */
 	switch(profile) {
@@ -193,8 +170,14 @@ static void cpufreq_set(enum Profile profile, int max_percent)
 	}
 }
 
-static void set_lowpower(void)
+static void set_lowpower(int acpi_platform_supported)
 {
+	if (acpi_platform_supported) {
+		if (write_oneshot_str(ACPI_PLPR_PATH, "low-power"))
+			die("Could not open %s for writing:", ACPI_PLPR_PATH);
+		return;
+	}
+
 	set_max_lost_work(15);
 	cpufreq_set(LOWPOWER, 50);
 
@@ -209,8 +192,14 @@ static void set_lowpower(void)
 		die("Could not open %s for writing:", PSTATE_NO_TURBO);
 }
 
-static void set_balanced(void)
+static void set_balanced(int acpi_platform_supported)
 {
+	if (acpi_platform_supported) {
+		if (write_oneshot_str(ACPI_PLPR_PATH, "balanced"))
+			die("Could not open %s for writing:", ACPI_PLPR_PATH);
+		return;
+	}
+
 	set_max_lost_work(15);
 	cpufreq_set(BALANCED, 100);
 
@@ -228,8 +217,14 @@ static void set_balanced(void)
 		die("Could not open %s for writing:", PSTATE_NO_TURBO);
 }
 
-static void set_performance(void)
+static void set_performance(int acpi_platform_supported)
 {
+	if (acpi_platform_supported) {
+		if (write_oneshot_str(ACPI_PLPR_PATH, "performance"))
+			die("Could not open %s for writing:", ACPI_PLPR_PATH);
+		return;
+	}
+
 	set_max_lost_work(15);
 	cpufreq_set(PERFORMANCE, 100);
 
@@ -253,9 +248,6 @@ int main(int argc, char *argv[])
 {
 	int vflag = 0;
 	int acpi_platform_supported = 0;
-	char *line = NULL;
-	size_t len, nread;
-	FILE *fd;
 
 	ARGBEGIN {
 	case 'v':
@@ -263,21 +255,15 @@ int main(int argc, char *argv[])
 		break;
 	default:
 		usage();
-		exit(1);
 	} ARGEND;
 
-	if (!access(ACPI_PLPR_PATH, F_OK))
-		acpi_platform_supported = 1;
-
-
 	if (vflag) {
-		if (acpi_platform_supported) {
-			if ((fd = fopen(ACPI_PLPR_PATH, "r")) == NULL)
-				die("Could not open %s for reading:", ACPI_PLPR_PATH);
-		} else {
-			if ((fd = fopen(S76_POW_PROF, "r")) == NULL)
-				die("Could not open %s for reading:", S76_POW_PROF);
-		}
+		char *line = NULL;
+		size_t len, nread;
+		FILE *fd;
+
+		if ((fd = fopen(S76_POW_PROF, "r")) == NULL)
+			die("Could not open %s for reading:", S76_POW_PROF);
 
 		nread = getline(&line, &len, fd);
 		fclose(fd);
@@ -285,38 +271,21 @@ int main(int argc, char *argv[])
 
 		printf("Current profile: %s\n", line);
 		free(line);
-		exit(0);
+		return 0;
 	}
 
 	if (argc != 1)
 		usage();
 
-	if (acpi_platform_supported) {
-		if ((fd = fopen(ACPI_PLPR_PATH, "w")) == NULL)
-			die("Could not open %s for writing:", ACPI_PLPR_PATH);
-
-		if (!strcmp(argv[0], "low-power"))
-			fprintf(fd, "low-power");
-		else if (!strcmp(argv[0], "balanced"))
-			fprintf(fd, "balanced");
-		else if (!strcmp(argv[0], "performance"))
-			fprintf(fd, "performance");
-		else {
-			fclose(fd);
-			usage();
-		}
-
-		fclose(fd);
-		printf("Platform profile set to: %s\n", argv[0]);
-		return 0;
-	}
+	if (!access(ACPI_PLPR_PATH, F_OK))
+		acpi_platform_supported = 1;
 
 	if (!strcmp(argv[0], "low-power"))
-		set_lowpower();
+		set_lowpower(acpi_platform_supported);
 	else if (!strcmp(argv[0], "balanced"))
-		set_balanced();
+		set_balanced(acpi_platform_supported);
 	else if (!strcmp(argv[0], "performance"))
-		set_performance();
+		set_performance(acpi_platform_supported);
 	else
 		usage();
 

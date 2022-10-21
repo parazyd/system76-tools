@@ -21,35 +21,19 @@ void die(const char *fmt, ...)
 	exit(1);
 }
 
-void reverse(char *s)
+int intlen(int n)
 {
-	int i, j;
-	char c;
-
-	for (i = 0, j = strlen(s)-1; i<j; i++, j--) {
-		c = s[i];
-		s[i] = s[j];
-		s[j] = c;
-	}
-}
-
-void itoa(int n, char *s)
-{
-	int i, sign;
-
-	if ((sign = n) < 0)
-		n = -n;
-
-	i = 0;
-	do {
-		s[i++] = n % 10 + '0';
-	} while ((n /= 10) > 0);
-
-	if (sign < 0)
-		s[i++] = '-';
-
-	s[i] = '\0';
-	reverse(s);
+	if (n < 0) return intlen(-n) + 1;
+	if (n < 10) return 1;
+	if (n < 100) return 2;
+	if (n < 1000) return 3;
+	if (n < 10000) return 4;
+	if (n < 100000) return 5;
+	if (n < 1000000) return 6;
+	if (n < 10000000) return 7;
+	if (n < 100000000) return 8;
+	if (n < 1000000000) return 9;
+	return 10;
 }
 
 int write_oneshot_str(const char *path, const char *text)
@@ -62,7 +46,7 @@ int write_oneshot_str(const char *path, const char *text)
 	fprintf(fd, text);
 	fclose(fd);
 
-	fprintf(stderr, "Wrote into %s: %s\n", path, text);
+	fprintf(stderr, "%s: %s\n", path, text);
 	return 0;
 }
 
@@ -76,6 +60,6 @@ int write_oneshot_int(const char *path, int value)
 	fprintf(fd, "%d", value);
 	fclose(fd);
 
-	fprintf(stderr, "Wrote into %s: %d\n", path, value);
+	fprintf(stderr, "%s: %d\n", path, value);
 	return 0;
 }

@@ -34,7 +34,6 @@ static void usage(void)
 int main(int argc, char *argv[])
 {
     int start, end; 
-    FILE *fd;
 
     ARGBEGIN {
     } ARGEND;
@@ -53,33 +52,19 @@ int main(int argc, char *argv[])
         end = 60;
     } else {
         usage();
-        exit(1);
+        return 1;
     }
 
     /* Without this, setting start threshold may fail if the previous end
-     * threshold is higher
-     */
-    if ((fd = fopen(END_FD, "w")) == NULL)
-        die("Could not open %s for writing:", END_FD);
+     * threshold is higher */
+	if (write_oneshot_int(END_FD, 100))
+		die("Could not open %s for writing:", END_FD);
 
-    fprintf(fd, "100");
-    fclose(fd);
-    fd = NULL;
+	if (write_oneshot_int(START_FD, start))
+		die("Could not open %s for writing:", START_FD);
 
-    if ((fd = fopen(START_FD, "w")) == NULL)
-        die("Could not open %s for writing:", START_FD);
+	if (write_oneshot_int(END_FD, end))
+		die("Could not open %s for writing:", END_FD);
 
-    fprintf(fd, "%d", start);
-    fclose(fd);
-    fd = NULL;
-
-    if ((fd = fopen(END_FD, "w")) == NULL)
-        die("Could not open %s for writing:", END_FD);
-
-    fprintf(fd, "%d", end);
-    fclose(fd);
-    fd = NULL;
-
-    printf("Thresholds set to: %d-%d\n", start, end);
     return 0;
 }
