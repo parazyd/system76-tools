@@ -1,7 +1,6 @@
 /* suid tool for setting screen brightness in increments
  * GPL-3
  */
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
@@ -35,8 +34,7 @@ int main(int argc, char *argv[])
 	enum Op op = 0;
 	int max, cur, inc;
 	int uflag = 0, dflag = 0, minflag = 0, maxflag = 0;
-	size_t len, nread;
-	char *line = NULL;
+	char buf[10];
 	FILE *fd;
 
 	ARGBEGIN {
@@ -67,13 +65,9 @@ int main(int argc, char *argv[])
 	if ((fd = fopen(BRIGHT_MAX, "r")) == NULL)
 		die("Couldn't read %s:", BRIGHT_MAX);
 
-	nread = getline(&line, &len, fd);
+	max = atoi(fgets(buf, 10, fd));
 	fclose(fd);
 	fd = NULL;
-
-	max = atoi(line);
-	free(line);
-	line = NULL;
 
 	/* Here the number of available increments can be configured */
 	inc = max / 20;
@@ -82,12 +76,7 @@ int main(int argc, char *argv[])
 	if ((fd = fopen(BRIGHT_CUR, "w+")) == NULL)
 		die("Couldn't open %s for r/w:", BRIGHT_CUR);
 
-	nread = getline(&line, &len, fd);
-	(void)nread;
-
-	cur = atoi(line);
-	free(line);
-	line = NULL;
+	cur = atoi(fgets(buf, 10, fd));
 
 	switch(op) {
 	case UP:

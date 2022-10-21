@@ -3,12 +3,12 @@
  * https://www.kernel.org/doc/html/latest/userspace-api/sysfs-platform_profile.html
  * https://mjmwired.net/kernel/Documentation/ABI/testing/sysfs-platform_profile
  */
-#define _GNU_SOURCE
 #include <stdio.h>
 #include <string.h>
 #include <stdlib.h>
 #include <unistd.h>
 #include <sys/sysinfo.h>
+#include <linux/limits.h>
 
 #include "arg.h"
 #include "common.h"
@@ -58,9 +58,8 @@ static void set_max_lost_work(int secs)
 static int get_frequency(enum MType typ, int cpu)
 {
 	const char *rem;
-	char *line = NULL, *path;
-	size_t nread, len;
-	int plen, ret;
+	char path[PATH_MAX], buf[10];
+	int ret;
 	FILE *fd;
 
 	switch(typ) {
@@ -72,23 +71,13 @@ static int get_frequency(enum MType typ, int cpu)
 		break;
 	}
 
-	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + intlen(cpu) + 1;
-	path = malloc(plen);
-	memset(path, 0, plen);
-	snprintf(path, plen, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
+	snprintf(path, PATH_MAX, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
 
-	if ((fd = fopen(path, "r")) == NULL) {
-		free(path);
+	if ((fd = fopen(path, "r")) == NULL)
 		die("Could not open cpu%d%s file for reading:", cpu, rem);
-	}
 
-	nread = getline(&line, &len, fd);
-	(void)nread;
-
-	ret = atoi(line);
-
-	free(path);
-	free(line);
+	ret = atoi(fgets(buf, 10, fd));
+	fclose(fd);
 
 	return ret;
 }
@@ -96,8 +85,7 @@ static int get_frequency(enum MType typ, int cpu)
 static void set_frequency(enum MType typ, int cpu, int freq)
 {
 	const char *rem;
-	char *path;
-	int plen;
+	char path[PATH_MAX];
 
 	switch(typ) {
 	case MIN:
@@ -108,36 +96,21 @@ static void set_frequency(enum MType typ, int cpu, int freq)
 		break;
 	}
 
-	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + intlen(cpu) + 1;
-	path = malloc(plen);
-	memset(path, 0, plen);
-	snprintf(path, plen, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
+	snprintf(path, PATH_MAX, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
 
-	if (write_oneshot_int(path, freq)) {
-		free(path);
+	if (write_oneshot_int(path, freq))
 		die("Could not open cpu%d%s file for writing:", cpu, rem);
-	}
-		
-	free(path);
 }
 
 static void set_governor(int cpu, const char *governor)
 {
 	const char *rem = "/cpufreq/scaling_governor";
-	char *path;
-	int plen;
+	char path[PATH_MAX];
 
-	plen = strlen(SYS_CPU_PREFIX) + strlen(rem) + intlen(cpu) + 1;
-	path = malloc(plen);
-	memset(path, 0, plen);
-	snprintf(path, plen, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
+	snprintf(path, PATH_MAX, "%s%d%s", SYS_CPU_PREFIX, cpu, rem);
 
-	if (write_oneshot_str(path, governor)) {
-		free(path);
+	if (write_oneshot_str(path, governor))
 		die("Could not write to cpu%d%s file:", cpu, rem);
-	}
-
-	free(path);
 }
 
 static void cpufreq_set(enum Profile profile, int max_percent)
@@ -258,19 +231,15 @@ int main(int argc, char *argv[])
 	} ARGEND;
 
 	if (vflag) {
-		char *line = NULL;
-		size_t len, nread;
+		char buf[12];
 		FILE *fd;
 
 		if ((fd = fopen(S76_POW_PROF, "r")) == NULL)
 			die("Could not open %s for reading:", S76_POW_PROF);
 
-		nread = getline(&line, &len, fd);
+		printf("Current profile: %s\n", fgets(buf, 12, fd));
 		fclose(fd);
-		(void)nread;
 
-		printf("Current profile: %s\n", line);
-		free(line);
 		return 0;
 	}
 
